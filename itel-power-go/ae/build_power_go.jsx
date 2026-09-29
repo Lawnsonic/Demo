@@ -53,9 +53,9 @@
         // Image-space anchors (pixels inside each still) used for the macro cuts.
         heroCenter: [1024, 1024],
         heroLogo: [1022, 1232],
-        boxCenter: [791, 420],
-        boxSpec: [1030, 212],
-        boxEnergy: [552, 212],
+        boxCenter: [686, 424],
+        boxSpec: [822, 188],
+        boxEnergy: [558, 182],
         handleCenter: [688, 384]
     };
 

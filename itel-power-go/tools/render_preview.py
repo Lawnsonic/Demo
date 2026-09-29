@@ -27,7 +27,7 @@ box = Image.open(PKG + "/footage/box_studio.png").convert("RGB")
 handle = Image.open(PKG + "/footage/handle_macro.png").convert("RGB")
 
 HERO_C, HERO_LOGO = (1024, 1024), (1022, 1232)
-BOX_C, BOX_SPEC, BOX_EN = (791, 420), (1030, 212), (552, 212)
+BOX_C, BOX_SPEC, BOX_EN = (686, 424), (822, 188), (558, 182)
 HANDLE_C = (688, 384)
 
 
