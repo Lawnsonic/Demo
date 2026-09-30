@@ -14,13 +14,14 @@
 </head>
 <body>
 <canvas id="c" width="1080" height="1920"></canvas>
+<script type="importmap">{ "imports": { "three": "./lib/three.module.js" } }</script>
 <script>
 // 20 s vertical (9:16) motion ad. Everything is a pure function of time t,
 // so the same code drives the live preview and the frame-exact video render.
 // Music is 120 BPM: one beat = 0.5 s, and every cut lands on a beat.
 const W = 1080, H = 1920, DUR = 20;
 const cv = document.getElementById('c');
-const ctx = cv.getContext('2d');
+let ctx = cv.getContext('2d');
 
 const RED = '#E4002B', RED_DARK = '#7a0016', INK = '#08080c', VOLT = '#FFD400', WHITE = '#ffffff';
 
@@ -63,65 +64,54 @@ function boltPath(s) {
   ctx.lineTo(-12 * s, 60 * s); ctx.lineTo(34 * s, -10 * s); ctx.lineTo(4 * s, -10 * s); ctx.closePath();
 }
 
-// The Power Go unit: slim graphite power bank with a red band and 4 status LEDs.
-const BANK = { w: 420, h: 780, r: 70, d: 30 };
-function drawBank(x, y, s, rot, o = {}) {
-  const { w, h, r, d } = BANK;
-  ctx.save();
-  ctx.translate(x, y); ctx.rotate(rot); ctx.scale(s, s);
-  // glow / shadow
-  ctx.save();
-  ctx.shadowColor = o.glowColor || 'rgba(228,0,43,.55)'; ctx.shadowBlur = o.glow ?? 90;
-  ctx.fillStyle = '#0d0d10';
-  ctx.beginPath(); ctx.roundRect(-w / 2 + d, -h / 2 + d * .6, w, h, r); ctx.fill();
-  ctx.restore();
-  // extruded side for depth
-  const side = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
-  side.addColorStop(0, '#2a2b31'); side.addColorStop(1, '#0c0c0f');
-  ctx.fillStyle = side;
-  for (let i = d; i > 0; i -= 3) { ctx.beginPath(); ctx.roundRect(-w / 2 + i, -h / 2 + i * .6, w, h, r); ctx.fill(); }
-  // body
-  const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
-  g.addColorStop(0, '#3a3c44'); g.addColorStop(.45, '#1b1c21'); g.addColorStop(1, '#2c2e35');
-  ctx.fillStyle = g;
-  ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, r); ctx.fill();
-  // brushed texture lines
-  ctx.save(); ctx.clip();
-  ctx.strokeStyle = 'rgba(255,255,255,.025)'; ctx.lineWidth = 2;
-  for (let i = -h / 2; i < h / 2; i += 7) { ctx.beginPath(); ctx.moveTo(-w / 2, i); ctx.lineTo(w / 2, i + 30); ctx.stroke(); }
-  // red band
-  ctx.fillStyle = RED; ctx.fillRect(-w / 2, -h / 2 + 120, w, 16);
-  // light sweep
-  if (o.sweep != null && o.sweep > 0 && o.sweep < 1) {
-    const sx = lerp(-w * 1.2, w * 1.2, o.sweep);
-    ctx.save(); ctx.translate(sx, 0); ctx.rotate(.35);
-    const sg = ctx.createLinearGradient(-90, 0, 90, 0);
-    sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(.5, 'rgba(255,255,255,.55)'); sg.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = sg; ctx.fillRect(-90, -h, 180, h * 2);
-    ctx.restore();
+// itel logo, redrawn from the carton / device print: tilted red speech-bubble oval,
+// white lowercase "itel", blue accent dot top-right. w = bubble width in px.
+function drawItelLogo(g, cx, cy, w, o = {}) {
+  const s = w / 1;
+  g.save(); g.translate(cx, cy);
+  if (o.dot) {
+    g.save(); g.translate(.42 * s, -.33 * s); g.rotate(-.35);
+    g.fillStyle = '#1f6fd1'; g.beginPath(); g.ellipse(0, 0, .1 * s, .072 * s, 0, 0, Math.PI * 2); g.fill(); g.restore();
   }
-  ctx.restore();
-  // rim highlight
-  const rim = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
-  rim.addColorStop(0, 'rgba(255,255,255,.55)'); rim.addColorStop(.5, 'rgba(255,255,255,.05)'); rim.addColorStop(1, 'rgba(255,255,255,.25)');
-  ctx.strokeStyle = rim; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.roundRect(-w / 2 + 1.5, -h / 2 + 1.5, w - 3, h - 3, r); ctx.stroke();
-  // USB-C port
-  ctx.fillStyle = '#050506'; ctx.beginPath(); ctx.roundRect(-46, -h / 2 + 34, 92, 26, 13); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 2; ctx.stroke();
-  // wordmark
-  font(92, 'Montserrat', 900); textC('itel', 0, -40, 'rgba(255,255,255,.92)');
-  ctx.letterSpacing = '10px'; font(28, 'Montserrat', 700); textC('POWER GO', 5, 30, 'rgba(255,255,255,.45)'); ctx.letterSpacing = '0px';
-  // LEDs
-  const lit = o.leds ?? 4;
-  for (let i = 0; i < 4; i++) {
-    const lx = -60 + i * 40, ly = h / 2 - 90;
-    ctx.save();
-    if (i < lit) { ctx.shadowColor = VOLT; ctx.shadowBlur = 24; ctx.fillStyle = VOLT; } else ctx.fillStyle = '#2d2e33';
-    ctx.beginPath(); ctx.arc(lx, ly, 9, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-  }
-  ctx.restore();
+  g.save(); g.rotate(-.1);
+  g.fillStyle = o.bubble || '#E4002B';
+  g.beginPath(); g.ellipse(0, 0, .5 * s, .3 * s, 0, 0, Math.PI * 2); g.fill();
+  // tail, bottom-left
+  g.beginPath(); g.moveTo(-.30 * s, .17 * s); g.quadraticCurveTo(-.3 * s, .33 * s, -.36 * s, .37 * s);
+  g.quadraticCurveTo(-.18 * s, .34 * s, -.12 * s, .27 * s); g.closePath(); g.fill();
+  g.restore();
+  g.save(); g.transform(1, 0, -.07, 1, 0, 0);
+  g.font = `800 ${.36 * s}px Montserrat`; g.letterSpacing = `${-.012 * s}px`;
+  g.fillStyle = o.text || '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('itel', 0, .01 * s);
+  g.restore();
+  g.restore();
+}
+window.drawItelLogo = drawItelLogo;
+// "itel Energy" lockup as printed top-left on the carton
+function drawEnergyLockup(g, x, y, h) {
+  const w = h * 1.6;
+  drawItelLogo(g, x + w / 2, y, w);
+  g.save(); g.font = `800 ${h * .62}px Montserrat`; g.fillStyle = '#E4002B'; g.textAlign = 'left'; g.textBaseline = 'middle';
+  g.transform(1, 0, -.12, 1, 0, 0); g.fillText('Energy', x + w * 1.06 + y * .12, y + h * .02); g.restore();
+}
+
+// 3D product (see product.js) composited into the 2D frame. Returns the port anchor.
+function drawProduct(x, y, S, pose) {
+  const r = window.Product.render(pose);
+  ctx.drawImage(r.canvas, x - S / 2, y - S / 2, S, S);
+  return [x - S / 2 + r.anchor[0] * S, y - S / 2 + r.anchor[1] * S];
+}
+
+// Whole-word landing: 0% scale and opacity -> 105% -> settles at 100%. No masks.
+function popK(t, t0, dur = .55) {
+  const k = prog(t, t0, t0 + dur);
+  const s = k < .65 ? 1.05 * eOutCubic(k / .65) : lerp(1.05, 1, eInOutCubic((k - .65) / .35));
+  return { s, a: eOutCubic(clamp(k / .45)), on: k > 0 };
+}
+function popDraw(t, t0, x, y, draw, dur) {
+  const p = popK(t, t0, dur); if (!p.on) return;
+  ctx.save(); ctx.globalAlpha *= p.a; ctx.translate(x, y); ctx.scale(Math.max(p.s, .001), Math.max(p.s, .001)); draw(); ctx.restore();
 }
 
 function drawPhone(x, y, s, rot, pct, pop) {
@@ -268,7 +258,7 @@ function scene2(t) {
   if (f > 0) { ctx.fillStyle = `rgba(255,255,255,${f})`; ctx.fillRect(0, 0, W, H); }
 }
 
-// 5.0 – 9.0 : hero reveal of the product.
+// 5.0 – 9.0 : hero reveal of the real product (3D turntable).
 function heroBg(t, cx, cy) {
   const pulse = beatPulse(t);
   const g = ctx.createRadialGradient(cx, cy, 50, cx, cy, 1300);
@@ -277,47 +267,35 @@ function heroBg(t, cx, cy) {
   rays(cx, cy, t, '#ff3355', 20, .05 + pulse * .03);
 }
 function scene3(t) {
-  const lt = t - 5;
-  heroBg(t, W / 2, 820);
+  heroBg(t, W / 2, 780);
   perspectiveGrid(t, '#ff2d55', .35);
-  // shockwaves
-  for (const [t0, c] of [[5.0, WHITE], [5.12, RED], [7.0, VOLT]]) {
+  for (const [t0, c] of [[5.0, WHITE], [5.12, RED], [7.0, '#ffffff']]) {
     const k = prog(t, t0, t0 + .9); if (k <= 0 || k >= 1) continue;
-    ctx.save(); ctx.strokeStyle = c; ctx.globalAlpha = 1 - k; ctx.lineWidth = 40 * (1 - k) + 2;
-    ctx.beginPath(); ctx.arc(W / 2, 820, eOutCubic(k) * 1400, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+    ctx.save(); ctx.strokeStyle = c; ctx.globalAlpha = (1 - k) * (t0 === 7 ? .5 : 1); ctx.lineWidth = 40 * (1 - k) + 2;
+    ctx.beginPath(); ctx.arc(W / 2, 780, eOutCubic(k) * 1400, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
   }
   particles(t, '#ffb3c0', -1, 1);
-  // device entrance
-  const k = prog(t, 5.0, 5.9);
-  const y = lerp(2400, 820, eOutBack(k)) + Math.sin(t * 2.2) * 14;
-  const rot = lerp(-.6, -.1, eOutCubic(k)) + Math.sin(t * 1.6) * .02;
-  const leds = [6.5, 7.0, 7.5, 8.0].filter(x => t >= x).length;
-  drawBank(W / 2, y, 1, rot, { sweep: prog(t, 6.1, 6.8), leds, glow: 90 + beatPulse(t) * 60 });
-  // title
-  const title = 'POWER GO';
-  font(210); ctx.letterSpacing = '6px';
-  const total = ctx.measureText(title).width; let x = W / 2 - total / 2;
-  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  for (let i = 0; i < title.length; i++) {
-    const ch = title[i], cw = ctx.measureText(ch).width;
-    const kk = eOutBack(prog(t, 7.0 + i * .06, 7.35 + i * .06));
-    ctx.save(); ctx.globalAlpha = clamp(kk * 1.5); ctx.translate(x + cw / 2, 1480 + (1 - kk) * -160);
-    ctx.fillStyle = WHITE; ctx.shadowColor = 'rgba(228,0,43,.9)'; ctx.shadowBlur = 30;
-    ctx.fillText(ch, -cw / 2, 0); ctx.restore(); x += cw;
-  }
-  ctx.letterSpacing = '0px';
-  const kt = eOutCubic(prog(t, 6.8, 7.2));
-  ctx.globalAlpha = kt; font(80, 'Montserrat', 900); textC('itel', W / 2, 1320 + (1 - kt) * 30, WHITE);
-  const kg = eOutCubic(prog(t, 7.9, 8.4));
-  ctx.globalAlpha = kg; font(46, 'Montserrat', 500); textC('Power that moves with you.', W / 2, 1640 + (1 - kg) * 30, 'rgba(255,255,255,.85)');
-  ctx.globalAlpha = 1;
-  // flash out of white
+  // product rises and spins into its hero angle
+  const k = prog(t, 5.0, 6.0);
+  const y = lerp(2500, 760, eOutBack(k)) + Math.sin(t * 2.2) * 12;
+  drawProduct(W / 2, y, 1300, {
+    yaw: lerp(-3.4, -.42, eOutCubic(prog(t, 5.0, 6.3))) + Math.sin(t * .9) * .06,
+    pitch: .16 + Math.sin(t * 1.3) * .02, roll: lerp(.25, 0, eOutCubic(k)),
+    sweep: prog(t, 6.2, 7.0), rimColor: 0xff2448, rim: 3.2, floatGap: .25, shadow: .5, ledPulse: beatPulse(t),
+  });
+  // lockup lands as whole units: logo, then POWER GO, then tagline
+  popDraw(t, 6.8, W / 2, 1360, () => drawItelLogo(ctx, 0, 0, 190, { dot: true }));
+  popDraw(t, 7.0, W / 2, 1520, () => {
+    ctx.save(); ctx.shadowColor = 'rgba(228,0,43,.9)'; ctx.shadowBlur = 40;
+    fitText('POWER GO', 940, 170, 'Montserrat', 900); textC('POWER GO', 0, 0, WHITE); ctx.restore();
+  });
+  popDraw(t, 7.9, W / 2, 1650, () => { font(46, 'Montserrat', 500); textC('Power that moves with you.', 0, 0, 'rgba(255,255,255,.88)'); });
   const f = 1 - eOutCubic(prog(t, 5.0, 5.4));
   if (f > 0) { ctx.fillStyle = `rgba(255,255,255,${f})`; ctx.fillRect(0, 0, W, H); }
 }
 
-// 9.0 – 13.0 : charge anywhere. Bank -> cable -> phone fills to 100%.
-const PLACES = ['ON THE BUS', 'ON CAMPUS', 'AT THE MARKET', 'ON THE ROAD', 'AT THE GAME', 'IN TRAFFIC', 'AT WORK', 'ANYWHERE'];
+// 9.0 – 13.0 : charge anywhere. Power Go -> cable -> phone fills to 100%.
+const PLACES = ['ON THE BUS', 'ON CAMPUS', 'AT THE MARKET', 'ON THE ROAD', 'AT THE SHOP', 'DURING NEPA', 'AT WORK', 'ANYWHERE'];
 function marquee(t, txt, y, dir, speed, alpha) {
   font(190); ctx.save(); ctx.strokeStyle = `rgba(255,255,255,${alpha})`; ctx.lineWidth = 3;
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
@@ -330,49 +308,43 @@ function scene4(t) {
   const row = PLACES.join('  •  ') + '  •  ';
   marquee(t, row, 700, -1, 260, .07); marquee(t, row, 1120, 1, 200, .05); marquee(t, row, 1560, -1, 300, .07);
   particles(t, VOLT, -1, .6);
-  // header
   const h1 = eOutExpo(prog(t, 9.1, 9.4)), h2 = eOutExpo(prog(t, 9.35, 9.65));
   ctx.save(); ctx.translate(lerp(-700, 0, h1), 0); font(190); textC('CHARGE', W / 2, 220, WHITE); ctx.restore();
   ctx.save(); ctx.translate(lerp(900, 0, h2), 0); font(190); textC('ANYWHERE.', W / 2, 400, RED); ctx.restore();
-  // location chip, one per beat
   const idx = clamp(Math.floor((t - 9.5) / .5), 0, PLACES.length - 1);
   const lt = (t - 9.5) % .5, ck = eOutExpo(clamp(lt / .18));
   if (t > 9.5) {
     ctx.save(); ctx.translate(W / 2, 560);
     font(40, 'Montserrat', 700); ctx.letterSpacing = '8px';
-    const pw = ctx.measureText(PLACES[idx]).width + 80;
-    ctx.fillStyle = idx === PLACES.length - 1 ? VOLT : 'rgba(255,255,255,.1)';
+    const pw = ctx.measureText(PLACES[idx]).width + 80, last = idx === PLACES.length - 1;
+    ctx.fillStyle = last ? VOLT : 'rgba(255,255,255,.1)';
     ctx.beginPath(); ctx.roundRect(-pw / 2, -38, pw, 76, 38); ctx.fill();
     ctx.beginPath(); ctx.rect(-pw / 2, -38, pw, 76); ctx.clip();
-    textC(PLACES[idx], 4, lerp(60, 2, ck), idx === PLACES.length - 1 ? INK : WHITE);
+    textC(PLACES[idx], 4, lerp(60, 2, ck), last ? INK : WHITE);
     ctx.letterSpacing = '0px'; ctx.restore();
   }
-  // devices
   const e1 = eOutBack(prog(t, 9.2, 9.8)), e2 = eOutBack(prog(t, 9.3, 9.9));
-  const bank = { x: lerp(-400, 300, e1), y: 1500 + Math.sin(t * 2) * 8, s: .46, r: -.14 };
-  const phone = { x: lerp(1500, 680, e2), y: 1080 + Math.sin(t * 2 + 1) * 8, s: .82, r: .07 };
-  const top = [bank.x + Math.sin(bank.r) * BANK.h / 2 * bank.s, bank.y - Math.cos(bank.r) * BANK.h / 2 * bank.s];
+  const phone = { x: lerp(1500, 700, e2), y: 1060 + Math.sin(t * 2 + 1) * 8, s: .8, r: .07 };
+  const bx = lerp(-500, 290, e1), by = 1440 + Math.sin(t * 2) * 8;
+  // draw the product first to get its real port position for the cable
+  const port = drawProduct(bx, by, 820, { yaw: .5, pitch: .32, sweep: prog(t, 10.2, 11.2), rimColor: 0xffd400, rim: 1.6, shadow: 0, ledPulse: t > 10 ? .5 + .5 * Math.sin(t * 12) : 0 });
   const bot = [phone.x - Math.sin(phone.r) * 380 * phone.s, phone.y + Math.cos(phone.r) * 380 * phone.s];
-  const p1 = [top[0], top[1] - 240], p2 = [bot[0], bot[1] + 260];
-  // cable
+  const p1 = [port[0] - 40, port[1] - 260], p2 = [bot[0], bot[1] + 260];
   const ck2 = eInOutCubic(prog(t, 9.7, 10.1));
   if (ck2 > 0) {
     ctx.save(); ctx.lineCap = 'round';
-    ctx.strokeStyle = '#1e1e24'; ctx.lineWidth = 18; ctx.beginPath();
-    for (let i = 0; i <= 60 * ck2; i++) { const p = bez(top, p1, p2, bot, i / 60); i ? ctx.lineTo(...p) : ctx.moveTo(...p); } ctx.stroke();
+    ctx.strokeStyle = '#1e1e24'; ctx.lineWidth = 16; ctx.beginPath();
+    for (let i = 0; i <= 60 * ck2; i++) { const p = bez(port, p1, p2, bot, i / 60); i ? ctx.lineTo(...p) : ctx.moveTo(...p); } ctx.stroke();
     ctx.shadowColor = VOLT; ctx.shadowBlur = 25; ctx.strokeStyle = VOLT; ctx.lineWidth = 5; ctx.stroke();
-    // energy pulses
     if (t > 10 && t < 12.2) for (let i = 0; i < 6; i++) {
-      const k = ((t - 10) * 1.4 + i / 6) % 1, p = bez(top, p1, p2, bot, k);
-      ctx.fillStyle = WHITE; ctx.beginPath(); ctx.arc(p[0], p[1], 12, 0, Math.PI * 2); ctx.fill();
+      const k = ((t - 10) * 1.4 + i / 6) % 1, p = bez(port, p1, p2, bot, k);
+      ctx.fillStyle = WHITE; ctx.beginPath(); ctx.arc(p[0], p[1], 11, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
   }
   const pct = lerp(1, 100, eInOutCubic(prog(t, 10.0, 12.0)));
   const pop = t >= 12 ? Math.exp(-(t - 12) * 5) : 0;
-  drawBank(bank.x, bank.y, bank.s, bank.r, { leds: 4, glow: 60, glowColor: 'rgba(255,212,0,.35)' });
   drawPhone(phone.x, phone.y, phone.s, phone.r, pct, pop);
-  // completion burst
   if (t >= 12) {
     const k = prog(t, 12, 12.8);
     ctx.save(); ctx.strokeStyle = VOLT; ctx.globalAlpha = 1 - k; ctx.lineWidth = 8;
@@ -385,92 +357,156 @@ function scene4(t) {
   }
 }
 
-// 13.0 – 16.5 : three benefit slabs, each on the beat.
+// 13.0 – 16.5 : white liquid-glass spec cards floating over the product.
+const bgc = document.createElement('canvas'); bgc.width = W; bgc.height = H;
+const bctx = bgc.getContext('2d');
 function icon(kind, s) {
-  ctx.save(); ctx.scale(s, s); ctx.strokeStyle = WHITE; ctx.fillStyle = WHITE; ctx.lineWidth = 8; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  if (kind === 'pocket') {
-    ctx.beginPath(); ctx.moveTo(-55, -50); ctx.lineTo(55, -50); ctx.lineTo(50, 30); ctx.quadraticCurveTo(0, 70, -50, 30); ctx.closePath(); ctx.stroke();
-    ctx.fillStyle = RED; ctx.beginPath(); ctx.roundRect(-18, -80, 36, 70, 8); ctx.fill();
-  } else if (kind === 'bolt') { ctx.fillStyle = VOLT; boltPath(1); ctx.fill(); }
+  ctx.save(); ctx.scale(s, s); ctx.strokeStyle = '#15151c'; ctx.lineWidth = 7; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if (kind === 'battery') {
+    ctx.beginPath(); ctx.roundRect(-52, -30, 96, 60, 10); ctx.stroke();
+    ctx.fillStyle = '#15151c'; ctx.beginPath(); ctx.roundRect(46, -12, 10, 24, 3); ctx.fill();
+    ctx.fillStyle = RED; for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.roundRect(-42 + i * 21, -20, 16, 40, 3); ctx.fill(); }
+  } else if (kind === 'bolt') { ctx.fillStyle = RED; boltPath(.95); ctx.fill(); }
   else {
-    ctx.beginPath(); ctx.roundRect(-60, -55, 50, 95, 10); ctx.stroke();
-    ctx.beginPath(); ctx.roundRect(10, -40, 55, 85, 10); ctx.stroke();
-    ctx.fillStyle = RED; ctx.beginPath(); ctx.arc(0, 60, 10, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(-48, -14, 96, 62, 16); ctx.stroke();
+    ctx.strokeStyle = '#b8895f'; ctx.lineWidth = 12;
+    ctx.beginPath(); ctx.moveTo(-40, -8); ctx.bezierCurveTo(-44, -70, 44, -70, 40, -8); ctx.stroke();
+    ctx.fillStyle = RED; ctx.beginPath(); ctx.ellipse(0, 18, 14, 9, -.1, 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
 }
 const FEATS = [
-  { t: 13.2, n: '01', icon: 'pocket', h: 'POCKET SIZE', s: 'Slips into any bag or pocket' },
-  { t: 13.8, n: '02', icon: 'bolt', h: 'CHARGE ON THE GO', s: 'Top up while you keep moving' },
-  { t: 14.4, n: '03', icon: 'multi', h: 'ALWAYS READY', s: 'Your backup when there is no socket' },
+  { t: 13.2, n: '01', icon: 'battery', h: '100,000mAh', s: 'Massive capacity, ready when you are' },
+  { t: 13.8, n: '02', icon: 'bolt', h: '130W OUTPUT', s: 'Serious power across multiple ports' },
+  { t: 14.4, n: '03', icon: 'strap', h: 'CARRY STRAP', s: 'Grab it and go, anywhere' },
 ];
-function scene5(t) {
-  ctx.fillStyle = '#0a0a0f'; ctx.fillRect(0, 0, W, H);
-  // diagonal stripes drifting
-  ctx.save(); ctx.globalAlpha = .05; ctx.fillStyle = RED; ctx.translate((t * 80) % 120, 0);
-  for (let x = -H; x < W + H; x += 120) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + 50, 0); ctx.lineTo(x + 50 - H * .5, H); ctx.lineTo(x - H * .5, H); ctx.fill(); }
-  ctx.restore();
-  const out = eInExpo(prog(t, 15.9, 16.3));
-  const hk = eOutExpo(prog(t, 13.0, 13.3));
-  ctx.globalAlpha = hk; font(150);
-  textC('BUILT FOR', W / 2 - out * 1200, 260, WHITE); textC('YOUR HUSTLE', W / 2 + out * 1200, 420, RED);
+function glassBg(t, fade) {
+  const main = ctx; ctx = bctx;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#f1f0ee'; ctx.fillRect(0, 0, W, H);
+  const blobs = [[RED, .55, 220 + Math.sin(t) * 120, 650, 520], ['#ff8fa3', .5, 900, 1350 + Math.cos(t * .8) * 120, 560],
+                 ['#ffc9a0', .55, 260, 1650, 480], [RED, .35, 860 + Math.cos(t * 1.2) * 90, 380, 380]];
+  for (const [c, a, x, y, r] of blobs) {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, c); g.addColorStop(1, 'rgba(241,240,238,0)');
+    ctx.globalAlpha = a * fade; ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
   ctx.globalAlpha = 1;
+  const k = eOutCubic(prog(t, 13.0, 13.8));
+  drawProduct(W / 2, lerp(1250, 1120, k), 1650, { yaw: -.9 + (t - 13) * .35, pitch: .12, rimColor: 0xffffff, rim: 1.2, shadow: .9, exposure: 1.05 });
+  ctx = main;
+}
+function glassPanel(x, y, w, h, r, flash) {
+  // soft diffused drop shadow (shape drawn off-canvas, only its shadow lands here)
+  ctx.save(); ctx.shadowColor = 'rgba(40,20,30,.22)'; ctx.shadowBlur = 70; ctx.shadowOffsetX = 5000; ctx.shadowOffsetY = 30;
+  ctx.fillStyle = '#000'; ctx.beginPath(); ctx.roundRect(x - 5000, y, w, h, r); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.clip();
+  // frosted, slightly magnified background = refraction through thick glass
+  ctx.filter = 'blur(26px) saturate(1.5)';
+  const cx = x + w / 2, cy = y + h / 2, m = 1.08;
+  ctx.drawImage(bgc, cx - (cx) * m, cy - (cy) * m, W * m, H * m);
+  ctx.filter = 'none';
+  ctx.fillStyle = 'rgba(255,255,255,.26)'; ctx.fillRect(x, y, w, h);
+  // liquid highlights: bright top edge, soft glow pooling at bottom
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, 'rgba(255,255,255,.6)'); g.addColorStop(.18, 'rgba(255,255,255,.06)');
+  g.addColorStop(.8, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(255,255,255,.35)');
+  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  const sp = ctx.createRadialGradient(x + w * .18, y, 0, x + w * .18, y, w * .5);
+  sp.addColorStop(0, 'rgba(255,255,255,.55)'); sp.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = sp; ctx.fillRect(x, y, w, h);
+  if (flash > 0) { ctx.fillStyle = `rgba(255,255,255,${flash * .35})`; ctx.fillRect(x, y, w, h); }
+  // edge refraction band (blurred bright rim just inside the edge)
+  ctx.filter = 'blur(6px)'; ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 14;
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.stroke(); ctx.filter = 'none';
+  ctx.restore();
+  // fine inner stroke catching the light
+  const st = ctx.createLinearGradient(x, y, x + w, y + h);
+  st.addColorStop(0, 'rgba(255,255,255,.95)'); st.addColorStop(.5, 'rgba(255,255,255,.35)'); st.addColorStop(1, 'rgba(255,255,255,.8)');
+  ctx.strokeStyle = st; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.roundRect(x + 1.5, y + 1.5, w - 3, h - 3, r - 1.5); ctx.stroke();
+}
+function scene5(t) {
+  const fade = 1 - prog(t, 15.9, 16.4);
+  glassBg(t, fade);
+  ctx.drawImage(bgc, 0, 0);
+  const out = eInExpo(prog(t, 15.85, 16.25));
+  ctx.save(); ctx.globalAlpha = 1 - out;
+  popDraw(t, 13.0, W / 2, 250, () => { font(140); textC('BUILT FOR', 0, 0, '#15151c'); }, .45);
+  popDraw(t, 13.12, W / 2, 400, () => { font(140); textC('YOUR HUSTLE', 0, 0, RED); }, .45);
+  ctx.restore();
   FEATS.forEach((f, i) => {
-    const k = eOutExpo(prog(t, f.t, f.t + .35));
+    const k = eOutExpo(prog(t, f.t, f.t + .4));
+    if (k <= 0) return;
     const dir = i % 2 ? 1 : -1;
-    const x = W / 2 + dir * (1 - k) * 1300 - dir * out * 1400, y = 740 + i * 360;
-    ctx.save(); ctx.translate(x, y);
-    ctx.fillStyle = '#16161d'; ctx.beginPath(); ctx.roundRect(-480, -150, 960, 300, 36); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = RED; ctx.beginPath(); ctx.roundRect(-480, -150, 18, 300, [36, 0, 0, 36]); ctx.fill();
-    const flash = Math.exp(-Math.max(0, t - f.t - .3) * 6) * (t > f.t + .3 ? 1 : 0);
-    ctx.fillStyle = `rgba(255,255,255,${flash * .12})`; ctx.beginPath(); ctx.roundRect(-480, -150, 960, 300, 36); ctx.fill();
-    ctx.save(); ctx.translate(-330, 0); ctx.fillStyle = 'rgba(255,255,255,.06)'; ctx.beginPath(); ctx.arc(0, 0, 100, 0, Math.PI * 2); ctx.fill();
-    icon(f.icon, 1 + .15 * flash); ctx.restore();
+    const pw = 940, ph = 270, y = 640 + i * 350;
+    const x = (W - pw) / 2 + dir * (1 - k) * 1300 - dir * out * 1500;
+    const flash = t > f.t + .3 ? Math.exp(-(t - f.t - .3) * 6) : 0;
+    glassPanel(x, y, pw, ph, 56, flash);
+    ctx.save(); ctx.translate(x, y + ph / 2);
+    // icon in an inner glass bubble
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.beginPath(); ctx.arc(150, 0, 88, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.95)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.save(); ctx.translate(150, 0); icon(f.icon, 1 + .12 * flash); ctx.restore();
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    font(30, 'Montserrat', 700); ctx.fillStyle = RED; ctx.fillText(f.n, -190, -60);
-    fitText(f.h, 620, 92); ctx.fillStyle = WHITE; ctx.fillText(f.h, -190, 30);
-    font(36, 'Montserrat', 500); ctx.fillStyle = 'rgba(255,255,255,.65)'; ctx.fillText(f.s, -190, 90);
+    font(28, 'Montserrat', 800); ctx.fillStyle = RED; ctx.fillText(f.n, 280, -52);
+    fitText(f.h, 600, 90); ctx.fillStyle = '#15151c'; ctx.fillText(f.h, 280, 34);
+    font(33, 'Montserrat', 600); ctx.fillStyle = 'rgba(21,21,28,.62)'; ctx.fillText(f.s, 280, 86);
     ctx.restore();
   });
-  // red iris into end card
-  const ir = eInOutCubic(prog(t, 16.05, 16.5));
-  if (ir > 0) { ctx.fillStyle = RED; ctx.beginPath(); ctx.arc(W / 2, H / 2, ir * 1150, 0, Math.PI * 2); ctx.fill(); }
+  // carton-style red band rises into the end card
+  const rb = eInOutCubic(prog(t, 16.0, 16.5));
+  if (rb > 0) { ctx.fillStyle = RED; ctx.fillRect(-50, lerp(H + 60, BAND_Y, rb), W + 100, H); }
 }
 
-// 16.5 – 20.0 : end card / pack shot.
+// 16.5 – 20.0 : end card modelled on the Power Go carton.
+const BAND_Y = 1190;
 function scene6(t) {
-  ctx.fillStyle = RED; ctx.fillRect(0, 0, W, H);
-  const g = ctx.createRadialGradient(W / 2, 700, 100, W / 2, 900, 1400);
-  g.addColorStop(0, 'rgba(255,90,110,.55)'); g.addColorStop(1, 'rgba(60,0,10,.6)');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  // giant bolt watermark
-  ctx.save(); ctx.translate(W / 2 + 140, 760); ctx.rotate(.12); ctx.globalAlpha = .12; ctx.fillStyle = INK; boltPath(11); ctx.fill(); ctx.restore();
-  rays(W / 2, 700, t, WHITE, 16, .05);
-  particles(t, WHITE, -1, .5);
-  // impact ring
-  const k0 = prog(t, 16.5, 17.3);
-  if (k0 < 1) { ctx.save(); ctx.strokeStyle = WHITE; ctx.globalAlpha = 1 - k0; ctx.lineWidth = 30 * (1 - k0) + 2; ctx.beginPath(); ctx.arc(W / 2, 700, eOutCubic(k0) * 1300, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
-  // product
-  const ks = eOutBack(prog(t, 16.5, 17.1));
-  drawBank(W / 2, 700 + Math.sin(t * 2) * 12, lerp(.2, .72, ks), lerp(.5, -.08, eOutCubic(prog(t, 16.5, 17.2))) + Math.sin(t * 1.4) * .02,
-           { leds: 4, glow: 80, glowColor: 'rgba(0,0,0,.6)', sweep: prog(t, 17.6, 18.3) });
-  // lockup
-  const kl = eOutCubic(prog(t, 16.9, 17.3));
-  ctx.globalAlpha = kl; font(96, 'Montserrat', 900); textC('itel', W / 2, 1150 + (1 - kl) * 40, WHITE); ctx.globalAlpha = 1;
-  const kw = eOutExpo(prog(t, 17.05, 17.6));
-  ctx.save(); ctx.beginPath(); ctx.rect(0, 1250, W, 260); ctx.clip();
-  font(240); ctx.letterSpacing = '4px'; textC('POWER GO', W / 2 + 2, 1375 + (1 - kw) * 260, WHITE); ctx.letterSpacing = '0px';
+  const bg = ctx.createLinearGradient(0, 0, 0, BAND_Y);
+  bg.addColorStop(0, '#ffffff'); bg.addColorStop(1, '#ecebea');
+  ctx.fillStyle = bg; ctx.fillRect(-50, -50, W + 100, BAND_Y + 50);
+  const soft = ctx.createRadialGradient(W / 2, 760, 0, W / 2, 760, 620);
+  soft.addColorStop(0, 'rgba(255,255,255,1)'); soft.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = soft; ctx.fillRect(0, 0, W, BAND_Y);
+  popDraw(t, 16.7, 0, 0, () => drawEnergyLockup(ctx, 70, 130, 88), .5);
+  popDraw(t, 16.8, W - 70, 132, () => {
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    font(40, 'Montserrat', 800); ctx.fillStyle = RED; ctx.fillText('IESS-320T', 0, 0);
+    font(26, 'Montserrat', 600); ctx.fillStyle = 'rgba(21,21,28,.6)'; ctx.fillText('Portable Power', 0, 40);
+  }, .5);
+  // product lands on the band edge
+  const ks = eOutBack(prog(t, 16.5, 17.2));
+  drawProduct(W / 2, 745 + (1 - ks) * 80, lerp(650, 1200, ks), {
+    yaw: lerp(1.6, -.38, eOutCubic(prog(t, 16.5, 17.5))) + (t - 17.5) * .03, pitch: .1,
+    rimColor: 0xff4060, rim: 1.4, shadow: 1, sweep: prog(t, 17.8, 18.8), exposure: 1.02,
+  });
+  // red band with darker diagonal streaks, like the box
+  ctx.fillStyle = RED; ctx.fillRect(-50, BAND_Y, W + 100, H);
+  ctx.save(); ctx.beginPath(); ctx.rect(-50, BAND_Y, W + 100, H); ctx.clip();
+  ctx.globalAlpha = .18; ctx.strokeStyle = '#8a0019'; ctx.lineWidth = 3;
+  for (let i = 0; i < 9; i++) { const o = i * 70 + (t * 40) % 70; ctx.beginPath(); ctx.moveTo(-100, BAND_Y + 420 + o * .3); ctx.bezierCurveTo(300, BAND_Y + 200 + o, 700, BAND_Y + 500 - o * .4, 1200, BAND_Y + 120 + o * .6); ctx.stroke(); }
   ctx.restore();
-  const kt = eOutCubic(prog(t, 17.6, 18.0));
-  ctx.globalAlpha = kt; font(50, 'Montserrat', 700); textC('Stay charged. Keep moving.', W / 2, 1560 + (1 - kt) * 25, WHITE); ctx.globalAlpha = 1;
-  // CTA pill
-  const kc = eOutElastic(prog(t, 18.0, 18.9));
-  const pulse = 1 + .04 * Math.exp(-((t - 19.0) > 0 ? (t - 19.0) * 4 : 99));
+  const k0 = prog(t, 16.5, 17.3);
+  if (k0 < 1) { ctx.save(); ctx.strokeStyle = WHITE; ctx.globalAlpha = (1 - k0) * .8; ctx.lineWidth = 24 * (1 - k0) + 2; ctx.beginPath(); ctx.arc(W / 2, 760, eOutCubic(k0) * 1300, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
+  // POWER GO with the carton's outline echo; both land whole
+  popDraw(t, 17.0, W / 2, 1300, () => {
+    fitText('POWER GO', 900, 170, 'Montserrat', 900); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 2.5; ctx.strokeText('POWER GO', 0, 0);
+  });
+  popDraw(t, 17.12, W / 2, 1420, () => {
+    ctx.save(); ctx.shadowColor = 'rgba(90,0,15,.35)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8;
+    fitText('POWER GO', 900, 170, 'Montserrat', 900); textC('POWER GO', 0, 0, WHITE); ctx.restore();
+  });
+  popDraw(t, 17.6, W / 2, 1560, () => {
+    font(44, 'Montserrat', 700); ctx.letterSpacing = '4px'; textC('100,000mAh   |   130W', 2, 0, WHITE); ctx.letterSpacing = '0px';
+  });
+  popDraw(t, 17.85, W / 2, 1635, () => { font(40, 'Montserrat', 500); textC('Stay charged. Keep moving.', 0, 0, 'rgba(255,255,255,.9)'); });
+  const kc = eOutElastic(prog(t, 18.2, 19.1));
+  const pulse = 1 + .04 * (t > 19.2 ? Math.exp(-(t - 19.2) * 4) : 0);
   if (kc > 0) {
-    ctx.save(); ctx.translate(W / 2, 1730); ctx.scale(kc * pulse, kc * pulse);
-    ctx.fillStyle = INK; ctx.beginPath(); ctx.roundRect(-270, -62, 540, 124, 62); ctx.fill();
-    font(44, 'Montserrat', 900); ctx.letterSpacing = '8px'; textC('AVAILABLE NOW', 4, 2, WHITE); ctx.letterSpacing = '0px';
+    ctx.save(); ctx.translate(W / 2, 1770); ctx.scale(kc * pulse, kc * pulse);
+    ctx.shadowColor = 'rgba(80,0,10,.35)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 10;
+    ctx.fillStyle = WHITE; ctx.beginPath(); ctx.roundRect(-270, -58, 540, 116, 58); ctx.fill(); ctx.shadowColor = 'transparent';
+    font(42, 'Montserrat', 900); ctx.letterSpacing = '8px'; textC('AVAILABLE NOW', 4, 2, RED); ctx.letterSpacing = '0px';
     ctx.restore();
   }
 }
@@ -495,7 +531,7 @@ function wipe(t) {
   const a = prog(t, 12.78, 13.0), b = prog(t, 13.0, 13.25);
   const cover = t < 13 ? eInExpo(a) : 1 - eOutExpo(b);
   if (cover > 0 && t > 12.78 && t < 13.25) {
-    ctx.fillStyle = INK; const n = 10, bh = H / n;
+    ctx.fillStyle = '#f1f0ee'; const n = 10, bh = H / n;
     for (let i = 0; i < n; i++) ctx.fillRect(0, i * bh, W, bh * cover);
   }
 }
@@ -521,10 +557,11 @@ window.render = render;
 window.DUR = DUR;
 
 // Live preview (skipped when ?render is in the URL: the renderer drives frames itself)
+window.adReady = new Promise(res => window.addEventListener('product-ready', () => document.fonts.ready.then(res)));
 if (!location.search.includes('render')) {
   const audio = new Audio('soundtrack.wav');
   let start = null;
-  document.fonts.ready.then(() => {
+  window.adReady.then(() => {
     render(0);
     cv.addEventListener('click', () => { start = performance.now(); audio.currentTime = 0; audio.play().catch(() => {}); });
     const loop = now => { if (start !== null) { const t = (now - start) / 1000; render(Math.min(t, DUR - 1e-3)); } requestAnimationFrame(loop); };
@@ -532,5 +569,6 @@ if (!location.search.includes('render')) {
   });
 }
 </script>
+<script type="module" src="product.js"></script>
 </body>
 </html>

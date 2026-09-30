@@ -7,10 +7,19 @@ const [ffmpeg, out, audio] = process.argv.slice(2);
 const stillsArg = process.argv.indexOf('--stills');
 const FPS = 30;
 (async () => {
-  const browser = await chromium.launch();
+  const http = require('http');
+  const types = { '.html': 'text/html', '.js': 'text/javascript', '.woff2': 'font/woff2', '.wav': 'audio/wav' };
+  const server = http.createServer((req, res) => {
+    const f = path.join(__dirname, decodeURIComponent(req.url.split('?')[0]));
+    fs.readFile(f, (e, d) => { if (e) { res.writeHead(404); return res.end(); } res.writeHead(200, { 'Content-Type': types[path.extname(f)] || 'application/octet-stream' }); res.end(d); });
+  }).listen(0);
+  const port = server.address().port;
+  const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await browser.newPage({ viewport: { width: 1080, height: 1920 } });
   page.on('pageerror', e => { console.error('PAGE ERROR', e); process.exit(1); });
-  await page.goto('file://' + path.resolve(__dirname, 'index.html') + '?render=1');
+  page.on('console', m => { if (m.type() === 'error') console.error('console:', m.text()); });
+  await page.goto(`http://127.0.0.1:${port}/index.html?render=1`);
+  await page.waitForFunction(() => window.Product, null, { timeout: 60000 });
   await page.evaluate(() => document.fonts.ready);
   await page.evaluate(() => Promise.all([document.fonts.load('400 100px Anton'), document.fonts.load('900 100px Montserrat'), document.fonts.load('500 100px Montserrat')]));
   const grab = t => page.evaluate(t => { render(t); return document.getElementById('c').toDataURL('image/jpeg', 0.95); }, t);
@@ -19,7 +28,7 @@ const FPS = 30;
     for (const t of process.argv[stillsArg + 1].split(',').map(Number)) {
       fs.writeFileSync(path.join(out, `t${t.toFixed(2)}.jpg`), Buffer.from((await grab(t)).split(',')[1], 'base64'));
     }
-    await browser.close(); return;
+    await browser.close(); server.close(); return;
   }
   const args = ['-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-'];
   if (audio) args.push('-i', audio);
@@ -35,5 +44,5 @@ const FPS = 30;
   }
   ff.stdin.end();
   await new Promise(r => ff.on('close', r));
-  await browser.close();
+  await browser.close(); server.close();
 })();
